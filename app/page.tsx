@@ -38,6 +38,13 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
   });
   const json = (await res.json().catch(() => null)) as T | ApiError | null;
   if (!res.ok) {
+    if (res.status === 413) {
+      throw {
+        message: "That photo is too large to send. Please use a smaller photo.",
+        code: "too_large",
+        retryable: false,
+      } satisfies Failure;
+    }
     const err = (json ?? {}) as Partial<ApiError>;
     const failure: Failure = {
       message: typeof err.error === "string" ? err.error : `Request failed (${res.status}).`,
