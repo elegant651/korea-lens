@@ -417,15 +417,17 @@ export default function HomePage() {
               />
 
               {segments.length > 0 && (
-                <QuestionInput
-                  question={question}
-                  onQuestionChange={setQuestion}
-                  language={language}
-                  onLanguageChange={setLanguage}
-                  onSubmit={() => handleAsk(question)}
-                  hasSelection={selected !== null}
-                  busy={explaining}
-                />
+                <div className="sticky bottom-0 z-10 -mx-4 border-t border-neutral-200 bg-neutral-50/95 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur">
+                  <QuestionInput
+                    question={question}
+                    onQuestionChange={setQuestion}
+                    language={language}
+                    onLanguageChange={setLanguage}
+                    onSubmit={() => handleAsk(question)}
+                    hasSelection={selected !== null}
+                    busy={explaining}
+                  />
+                </div>
               )}
 
               {explainError && <ErrorBox failure={explainError} />}
