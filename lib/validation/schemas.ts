@@ -4,6 +4,8 @@ export const SUPPORTED_IMAGE_MIMES = ["image/jpeg", "image/png", "image/webp", "
 
 /** Max base64 payload accepted by the API routes (~10MB of binary). */
 export const MAX_IMAGE_BASE64_CHARS = 14_000_000;
+/** Max base64 audio payload (~6MB of WAV, minutes of speech). */
+export const MAX_AUDIO_BASE64_CHARS = 8_500_000;
 export const MAX_PROMPT_CHARS = 100;
 export const MAX_QUESTION_CHARS = 500;
 export const MAX_CONTEXT_CHARS = 500;
@@ -103,6 +105,63 @@ export const explainResponseSchema = explanationSchema.extend({
 });
 
 export type ExplainResponse = z.infer<typeof explainResponseSchema>;
+
+export const transcribeRequestSchema = z.object({
+  /** Base64-encoded WAV bytes (RIFF/WAVE mono PCM, 16 or 24 kHz). */
+  audioBase64: z
+    .string()
+    .min(1, "audio is required")
+    .max(MAX_AUDIO_BASE64_CHARS, "audio clip is too large")
+    .refine((s) => /^[A-Za-z0-9+/=\s-]+$/.test(s), "audio must be base64 or base64url"),
+  mimeType: z.literal("audio/wav"),
+  /** Response language name, reused as the transcription language bias. */
+  language: z.enum(SUPPORTED_LANGUAGES).default("English"),
+});
+
+export type TranscribeRequest = z.infer<typeof transcribeRequestSchema>;
+
+export const transcribeResponseSchema = z.object({
+  transcript: z.string(),
+  audioDurationMs: z.number().int().nonnegative(),
+  /** True when the transcript came from the live Transcribe API. */
+  live: z.boolean(),
+});
+
+export type TranscribeResponse = z.infer<typeof transcribeResponseSchema>;
+
+export const answerRequestSchema = z.object({
+  /** Object name from the vision identification step (not an image). */
+  objectName: z.string().trim().min(1, "object name is required").max(300),
+  objectContext: z.string().trim().max(1000).optional(),
+  question: z.string().trim().min(1, "question is required").max(MAX_QUESTION_CHARS),
+  language: z.enum(SUPPORTED_LANGUAGES).default("English"),
+});
+
+export type AnswerRequest = z.infer<typeof answerRequestSchema>;
+
+const answerSourceSchema = z.object({
+  title: z.string().max(300),
+  url: z.string().url().max(2000),
+});
+
+export const answerResponseSchema = z.object({
+  answer: z.string().min(1).max(8000),
+  sources: z.array(answerSourceSchema).max(5),
+  searched: z.boolean(),
+  /** True when the answer came from the live model. */
+  live: z.boolean(),
+});
+
+export type AnswerResponse = z.infer<typeof answerResponseSchema>;
+
+/** One follow-up Q&A entry shown in the answer thread. */
+export interface ThreadEntry {
+  question: string;
+  answer: string;
+  sources: Array<{ title: string; url: string }>;
+  searched: boolean;
+  live: boolean;
+}
 
 export const apiErrorSchema = z.object({
   error: z.string(),

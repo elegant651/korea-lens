@@ -44,7 +44,7 @@ function readEnv(name: string): string | null {
   return v && v.trim().length > 0 ? v.trim() : null;
 }
 
-function getApiKey(): string {
+export function getApiKey(): string {
   const key =
     readEnv("MODEL_API_KEY") ??
     readEnv("META_API_KEY") ??
@@ -58,7 +58,7 @@ function getApiKey(): string {
   return key;
 }
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
   return (readEnv("META_API_BASE_URL") ?? META_API_BASE_URL).replace(/\/+$/, "");
 }
 
@@ -108,6 +108,44 @@ export async function metaPostJson(url: string, options: MetaFetchOptions): Prom
       method: "POST",
       headers: { "content-type": "application/json", ...options.headers },
       body: options.body,
+      signal: AbortSignal.timeout(options.timeoutMs),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "TimeoutError") {
+      throw new MetaProviderError(`Request timed out after ${options.timeoutMs}ms`, 504, true);
+    }
+    throw new MetaProviderError("Could not reach the Meta Model API endpoint", 502, true);
+  }
+
+  const text = await res.text().catch(() => "");
+  if (!res.ok) {
+    throw providerErrorFromResponse(res.status, text);
+  }
+  if (text.trim().length === 0) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+export interface MetaFormOptions {
+  timeoutMs: number;
+  headers?: Record<string, string>;
+  form: FormData;
+}
+
+/**
+ * POST multipart/form-data (e.g. the ASR transcribe endpoint) with a timeout.
+ * Error mapping matches metaPostJson.
+ */
+export async function metaPostForm(url: string, options: MetaFormOptions): Promise<unknown> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: { ...options.headers },
+      body: options.form,
       signal: AbortSignal.timeout(options.timeoutMs),
     });
   } catch (err) {
