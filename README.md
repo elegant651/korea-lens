@@ -18,8 +18,10 @@ Mobile Browser (Next.js UI)
   ├── Question input + result card      components/question-input.tsx, explanation-card.tsx
   │
   └── Next.js Route Handlers (server only — API keys never reach the client)
-        ├── POST /api/segment  -> Meta SAM API        lib/meta/sam.ts
-        └── POST /api/explain  -> Meta vision model   lib/meta/muse-spark.ts
+        ├── POST /api/segment    -> Meta SAM API        lib/meta/sam.ts
+        ├── POST /api/explain    -> Meta vision model   lib/meta/muse-spark.ts
+        ├── POST /api/answer     -> Grounded follow-ups lib/meta/answer.ts
+        └── POST /api/transcribe -> Muse Voice Transcribe lib/meta/transcribe.ts
 ```
 
 Supporting modules:
@@ -64,6 +66,7 @@ desktop browser with a mobile viewport) and upload a photo.
 | `META_API_BASE_URL` | API base URL (default `https://api.meta.ai/v1`) |
 | `META_SAM_MODEL_ID` | SAM model ID (default `sam-3.1`) |
 | `META_VISION_MODEL_ID` | Vision model ID (default `muse-spark-1.3`) |
+| `META_TRANSCRIBE_MODEL_ID` | Transcribe model ID (default `muse-voice-transcribe-1.0`) |
 
 Both features call the Meta Model API Responses endpoint (`POST /responses`)
 with Bearer auth — see the [official docs](https://dev.meta.ai/docs/overview),
@@ -84,8 +87,9 @@ commit real credentials.
 ## Demo script (90 seconds)
 
 1. **Problem (0–15s):** "I'm visiting Seoul but can't read Korean product labels."
-2. **Segment (15–35s):** Upload a convenience-store shelf photo, show the live
-   SAM masks, and tap one package to highlight only that region.
+2. **Segment (15–35s):** Upload a convenience-store shelf photo, type or say
+   what to find ("snack package"), show the live SAM masks, and tap one
+   package to highlight only that region.
 3. **Understand (35–60s):** Ask "What is this? Is it sweet?" Show the selected
    crop and the grounded explanation with uncertainties.
 4. **Travel help (60–75s):** Show the Korean phrase to use with store staff.
@@ -103,6 +107,10 @@ never claim an object was segmented unless the live SAM result was used.
 - SAM takes one concept noun phrase per request ("snack package", not
   "find the snacks"); edit the "What should I find?" field or use the retry
   chips for other object types.
+- Voice follow-ups record up to 30s, convert to 16 kHz mono WAV in the
+  browser, and transcribe via Muse Voice Transcribe; the transcript lands in
+  the follow-up field for review before sending. Spoken answers use the
+  browser's built-in speech synthesis (no extra service).
 - No user accounts, persistent history, voice input, or video segmentation
   (explicit non-goals for the MVP; see proposal §3 and §10).
 - AI descriptions can be wrong: the app never presents guesses as verified

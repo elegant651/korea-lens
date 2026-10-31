@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import type { Segment } from "@/lib/segmentation/types";
+import { SegmentThumbnail } from "./segment-thumbnail";
 
 interface Props {
   segments: Segment[];
@@ -8,10 +10,33 @@ interface Props {
   onSelect: (id: string | null) => void;
   onClear: () => void;
   onRetry: () => void;
+  /** Source photo URL for thumbnails; rows render without them when null. */
+  imageUrl: string | null;
   disabled?: boolean;
 }
 
-export function SegmentList({ segments, selectedId, onSelect, onClear, onRetry, disabled }: Props) {
+export function SegmentList({
+  segments,
+  selectedId,
+  onSelect,
+  onClear,
+  onRetry,
+  imageUrl,
+  disabled,
+}: Props) {
+  const itemRefs = useRef(new Map<string, HTMLLIElement>());
+
+  // When an object is tapped on the image, bring its list row into view.
+  useEffect(() => {
+    if (!selectedId) return;
+    const el = itemRefs.current.get(selectedId);
+    if (!el) return;
+    const reducedMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "nearest", behavior: reducedMotion ? "auto" : "smooth" });
+  }, [selectedId]);
+
   if (segments.length === 0) return null;
   return (
     <section aria-label="Detected objects" className="flex flex-col gap-2">
@@ -20,28 +45,43 @@ export function SegmentList({ segments, selectedId, onSelect, onClear, onRetry, 
           {segments.length} object{segments.length === 1 ? "" : "s"} found — tap one above or pick here
         </h2>
       </div>
-      <ul className="flex flex-col gap-1.5" role="listbox" aria-label="Detected object candidates">
+      <ul
+        className="flex max-h-[180px] flex-col gap-1.5 overflow-y-auto pr-1"
+        role="listbox"
+        aria-label="Detected object candidates"
+      >
         {segments.map((seg: Segment, i: number) => {
           const isSelected = seg.id === selectedId;
           return (
-            <li key={seg.id}>
+            <li
+              key={seg.id}
+              ref={(el) => {
+                if (el) itemRefs.current.set(seg.id, el);
+                else itemRefs.current.delete(seg.id);
+              }}
+            >
               <button
                 type="button"
                 role="option"
                 aria-selected={isSelected}
                 disabled={disabled}
                 onClick={() => onSelect(isSelected ? null : seg.id)}
-                className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm disabled:opacity-50 ${
+                className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm disabled:opacity-50 ${
                   isSelected
                     ? "border-teal-700 bg-teal-50 font-semibold text-teal-900"
                     : "border-neutral-200 bg-white text-neutral-800"
                 }`}
               >
-                <span>
-                  {i + 1}. {seg.label ?? "object"}
+                <span className="flex min-w-0 flex-1 items-center gap-2.5">
+                  {imageUrl && <SegmentThumbnail imageUrl={imageUrl} bbox={seg.bbox} />}
+                  <span className="truncate">
+                    {i + 1}. {seg.label ?? "object"}
+                  </span>
                 </span>
                 {seg.score !== null && (
-                  <span className="text-xs text-neutral-500">{Math.round(seg.score * 100)}%</span>
+                  <span className="shrink-0 text-xs text-neutral-500">
+                    {Math.round(seg.score * 100)}%
+                  </span>
                 )}
               </button>
             </li>

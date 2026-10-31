@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { CommandInput } from "@/components/command-input";
 import { ExplanationCard } from "@/components/explanation-card";
 import { ImageUploader } from "@/components/image-uploader";
 import { QuestionInput } from "@/components/question-input";
@@ -9,9 +10,16 @@ import { SegmentationCanvas } from "@/components/segmentation-canvas";
 import { cropSelection, loadImageFile, type LoadedImage } from "@/lib/client/image";
 import { buildSampleData, buildSampleExplanation } from "@/lib/client/sample";
 import type { Segment } from "@/lib/segmentation/types";
-import type { ApiError, ExplainResponse, SegmentResponse } from "@/lib/validation/schemas";
+import type {
+  AnswerResponse,
+  ApiError,
+  ExplainResponse,
+  SegmentResponse,
+  ThreadEntry,
+  TranscribeResponse,
+} from "@/lib/validation/schemas";
 
-type Phase = "upload" | "segmenting" | "ready";
+type Phase = "upload" | "command" | "segmenting" | "ready";
 
 interface Failure {
   message: string;
@@ -47,21 +55,24 @@ export default function HomePage() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sampleMode, setSampleMode] = useState(false);
-  const [concept, setConcept] = useState("snack package");
+  const [concept, setConcept] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [segmentError, setSegmentError] = useState<Failure | null>(null);
   const [emptyResult, setEmptyResult] = useState(false);
 
   const [question, setQuestion] = useState("What is this?");
+  const [answeredQuestion, setAnsweredQuestion] = useState("");
   const [language, setLanguage] = useState<string>("English");
   const [explanation, setExplanation] = useState<ExplainResponse | null>(null);
   const [explaining, setExplaining] = useState(false);
   const [explainError, setExplainError] = useState<Failure | null>(null);
+  const [thread, setThread] = useState<ThreadEntry[]>([]);
+  const [answeringFollowUp, setAnsweringFollowUp] = useState(false);
 
   const imageRef = useRef<LoadedImage | null>(null);
   imageRef.current = image;
-  const conceptRef = useRef(concept);
-  conceptRef.current = concept;
+  const explanationRef = useRef<ExplainResponse | null>(null);
+  explanationRef.current = explanation;
 
   const resetForNewImage = () => {
     setSegments([]);
@@ -70,6 +81,8 @@ export default function HomePage() {
     setEmptyResult(false);
     setExplanation(null);
     setExplainError(null);
+    setAnsweredQuestion("");
+    setThread([]);
     setAttempts(0);
   };
 
@@ -111,7 +124,8 @@ export default function HomePage() {
         });
         setSampleMode(false);
         resetForNewImage();
-        await runSegmentation(img, conceptRef.current);
+        setConcept("");
+        setPhase("command");
       } catch (err) {
         setSegmentError({
           message: err instanceof Error ? err.message : "Could not read that image.",
@@ -120,7 +134,7 @@ export default function HomePage() {
         });
       }
     },
-    [runSegmentation],
+    [],
   );
 
   const handleSample = useCallback(() => {
@@ -155,12 +169,15 @@ export default function HomePage() {
       const seg = segments.find((s) => s.id === selectedId);
       if (!img || !seg || q.trim().length === 0) return;
       setExplaining(true);
+      setAnsweringFollowUp(false);
       setExplainError(null);
+      setAnsweredQuestion(q.trim());
       try {
         if (sampleMode) {
           // Clearly-labeled offline sample answer; never presented as live.
           await new Promise((r) => setTimeout(r, 400));
           setExplanation(buildSampleExplanation(q) as ExplainResponse);
+          setThread([]);
           return;
         }
         const crop = await cropSelection(img, seg.bbox, img.width, img.height);
@@ -171,6 +188,7 @@ export default function HomePage() {
           language,
         });
         setExplanation(result);
+        setThread([]);
       } catch (err) {
         if (err instanceof Error) {
           setExplainError({ message: err.message, code: "crop_error", retryable: true });
@@ -182,6 +200,75 @@ export default function HomePage() {
       }
     },
     [segments, selectedId, sampleMode, language],
+  );
+
+  const handleFollowUp = useCallback(
+    async (q: string) => {
+      const current = explanationRef.current;
+      if (!current || q.trim().length === 0) return;
+      setExplaining(true);
+      setAnsweringFollowUp(true);
+      setExplainError(null);
+      try {
+        if (sampleMode) {
+          await new Promise((r) => setTimeout(r, 400));
+          setThread((prev) => [
+            ...prev,
+            {
+              question: q.trim(),
+              answer:
+                "This is a sample follow-up answer. In the live app, the identified name is answered from knowledge and live web search instead of the image.",
+              sources: [],
+              searched: false,
+              live: false,
+            },
+          ]);
+          return;
+        }
+        const result = await postJson<AnswerResponse>("/api/answer", {
+          objectName: current.likelyName,
+          objectContext: current.shortDescription,
+          question: q.trim(),
+          language,
+        });
+        setThread((prev) => [
+          ...prev,
+          {
+            question: q.trim(),
+            answer: result.answer,
+            sources: result.sources,
+            searched: result.searched,
+            live: result.live,
+          },
+        ]);
+      } catch (err) {
+        if (err instanceof Error) {
+          setExplainError({ message: err.message, code: "answer_error", retryable: true });
+        } else {
+          setExplainError(err as Failure);
+        }
+      } finally {
+        setExplaining(false);
+        setAnsweringFollowUp(false);
+      }
+    },
+    [sampleMode, language],
+  );
+
+  const handleTranscribe = useCallback(
+    async (audioBase64: string): Promise<string> => {
+      try {
+        const result = await postJson<TranscribeResponse>("/api/transcribe", {
+          audioBase64,
+          mimeType: "audio/wav",
+          language,
+        });
+        return result.transcript;
+      } catch (err) {
+        throw new Error((err as Failure).message || "Transcription failed. Please try again.");
+      }
+    },
+    [language],
   );
 
   const startOver = () => {
@@ -220,30 +307,34 @@ export default function HomePage() {
       {phase === "upload" && (
         <div className="flex flex-col gap-3">
           <p className="text-sm leading-relaxed text-neutral-700">
-            Take a photo of a store shelf, menu, or sign. KoreaLens finds the objects in it — tap
-            one and ask what it is, in your language. Photos are processed to provide visual
-            assistance and are not stored.
+            Take a photo of a store shelf, menu, or sign. Then tell KoreaLens what to find — tap
+            an object and ask what it is, in your language. Photos are processed to provide
+            visual assistance and are not stored.
           </p>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="font-medium text-neutral-700">
-              What should I find? <span className="font-normal text-neutral-500">(one thing)</span>
-            </span>
-            <input
-              type="text"
-              value={concept}
-              maxLength={100}
-              onChange={(e) => setConcept(e.target.value)}
-              placeholder="snack package"
-              aria-label="Object to find"
-              className="rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400"
-            />
-          </label>
           <ImageUploader onFile={handleFile} onSample={handleSample} />
           {segmentError && <ErrorBox failure={segmentError} />}
         </div>
       )}
 
-      {phase !== "upload" && image && (
+      {phase === "command" && image && (
+        <div className="flex flex-col gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={image.url}
+            alt="Uploaded photo preview"
+            className="w-full rounded-lg"
+            style={{ aspectRatio: `${image.width} / ${image.height}`, objectFit: "contain" }}
+          />
+          <CommandInput
+            concept={concept}
+            onConceptChange={setConcept}
+            onSubmit={() => runSegmentation(image, concept)}
+            onTranscribe={handleTranscribe}
+          />
+        </div>
+      )}
+
+      {(phase === "segmenting" || phase === "ready") && image && (
         <>
           {sampleMode && (
             <p className="rounded-lg bg-amber-100 px-3 py-2 text-sm font-medium text-amber-900">
@@ -314,10 +405,13 @@ export default function HomePage() {
               <SegmentList
                 segments={segments}
                 selectedId={selectedId}
+                imageUrl={image.url}
                 onSelect={setSelectedId}
                 onClear={() => {
                   setSelectedId(null);
                   setExplanation(null);
+                  setAnsweredQuestion("");
+                  setThread([]);
                 }}
                 onRetry={() => image && runSegmentation(image, concept)}
               />
@@ -342,16 +436,23 @@ export default function HomePage() {
                     className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-teal-700"
                     aria-hidden
                   />
-                  Reading the selected object…
+                  {answeringFollowUp ? "Searching for the answer…" : "Reading the selected object…"}
                 </div>
               )}
 
               {explanation && !explaining && (
-                <ExplanationCard
-                  explanation={explanation}
-                  busy={explaining}
-                  onFollowUp={handleAsk}
-                />
+                <>
+                  <div aria-hidden className="h-16 shrink-0" />
+                  <ExplanationCard
+                    explanation={explanation}
+                    question={answeredQuestion}
+                    language={language}
+                    busy={explaining}
+                    onFollowUp={handleFollowUp}
+                    onTranscribe={handleTranscribe}
+                    thread={thread}
+                  />
+                </>
               )}
             </>
           )}
