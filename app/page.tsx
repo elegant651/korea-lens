@@ -295,29 +295,56 @@ export default function HomePage() {
 
   return (
     <main className="flex flex-col gap-4 px-4 pb-10 pt-4">
-      <header className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold tracking-tight text-neutral-900">KoreaLens</h1>
-          <p className="text-sm text-neutral-600">Point at Korea. Understand everything.</p>
+      <header className="sticky top-0 z-10 -mx-4 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden className="shrink-0">
+              <rect width="38" height="38" rx="11" fill="#0f766e" />
+              <circle cx="16.5" cy="16.5" r="7" fill="none" stroke="#fff" strokeWidth="2.5" />
+              <line x1="21.5" y1="21.5" x2="28" y2="28" stroke="#fde047" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+            <div>
+              <h1 className="text-2xl font-extrabold leading-none tracking-tight text-neutral-900">
+                Korea <span className="text-teal-700">Lens</span>
+              </h1>
+              <p className="mt-1 text-xs text-neutral-500">Point at Korea. Understand everything.</p>
+            </div>
+          </div>
+          {phase !== "upload" && (
+            <button
+              type="button"
+              onClick={startOver}
+              className="shrink-0 rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700"
+            >
+              New photo
+            </button>
+          )}
         </div>
-        {phase !== "upload" && (
-          <button
-            type="button"
-            onClick={startOver}
-            className="rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-700"
-          >
-            New photo
-          </button>
-        )}
       </header>
 
       {phase === "upload" && (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <p className="text-sm leading-relaxed text-neutral-700">
-            Take a photo of a store shelf, menu, or sign. Then tell KoreaLens what to find — tap
-            an object and ask what it is, in your language. Photos are processed to provide
-            visual assistance and are not stored.
+            Visiting Korea and puzzled by something you see? Snap a photo, and Korea Lens will
+            explain it in your language. Photos are only processed to help you — never stored.
           </p>
+          <ol className="flex flex-col gap-2" aria-label="How it works">
+            {[
+              ["1", "Snap a shelf, menu, or sign"],
+              ["2", "Name what to find, by typing or voice"],
+              ["3", "Tap an object and ask anything"],
+            ].map(([n, text]) => (
+              <li key={n} className="flex items-center gap-2.5 text-sm text-neutral-700">
+                <span
+                  aria-hidden
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-bold text-white"
+                >
+                  {n}
+                </span>
+                {text}
+              </li>
+            ))}
+          </ol>
           <ImageUploader onFile={handleFile} onSample={handleSample} />
           {segmentError && <ErrorBox failure={segmentError} />}
         </div>

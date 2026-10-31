@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "KoreaLens — Point at Korea. Understand everything.",
+  title: "Korea Lens — Point at Korea. Understand everything.",
   description:
     "Visual AI travel companion: tap an object in a photo of Korea and get an explanation in your language.",
 };

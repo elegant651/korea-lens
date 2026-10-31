@@ -31,7 +31,7 @@ export function ImageUploader({ onFile, onSample, disabled }: Props) {
           type="button"
           disabled={disabled}
           onClick={() => cameraRef.current?.click()}
-          className="rounded-lg bg-teal-700 px-4 py-3 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+          className="rounded-xl bg-teal-700 px-4 py-3.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
         >
           Take a photo
         </button>
@@ -39,7 +39,7 @@ export function ImageUploader({ onFile, onSample, disabled }: Props) {
           type="button"
           disabled={disabled}
           onClick={() => uploadRef.current?.click()}
-          className="rounded-lg border border-neutral-300 bg-white px-4 py-3 text-sm font-semibold text-neutral-900 shadow-sm disabled:opacity-50"
+          className="rounded-xl border border-neutral-300 bg-white px-4 py-3.5 text-sm font-semibold text-neutral-900 shadow-sm disabled:opacity-50"
         >
           Upload image
         </button>

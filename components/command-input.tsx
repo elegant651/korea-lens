@@ -65,7 +65,7 @@ export function CommandInput({ concept, onConceptChange, onSubmit, onTranscribe,
           type="button"
           onClick={onSubmit}
           disabled={!ready}
-          className="shrink-0 rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          className="shrink-0 rounded-xl bg-teal-700 px-5 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           Find
         </button>
