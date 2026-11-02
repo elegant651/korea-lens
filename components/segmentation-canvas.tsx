@@ -9,7 +9,7 @@ import {
   type ContainLayout,
 } from "@/lib/segmentation/coordinate-mapping";
 import { decodeSegmentMask } from "@/lib/segmentation/mask-decoder";
-import type { Segment } from "@/lib/segmentation/types";
+import type { Point, Segment } from "@/lib/segmentation/types";
 
 interface Props {
   imageUrl: string;
@@ -18,8 +18,15 @@ interface Props {
   segments: Segment[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
+  /** When true, dragging draws a box instead of tap-selecting. */
+  drawMode?: boolean;
+  /** Fired with the drawn box in original image pixels. */
+  onBoxDrawn?: (box: { x: number; y: number; width: number; height: number }) => void;
   disabled?: boolean;
 }
+
+/** Minimum drawn size in original image pixels (guards accidental taps). */
+const MIN_DRAW_SIZE = 12;
 
 const PALETTE = ["#14b8a6", "#f59e0b", "#38bdf8", "#fb7185", "#a3e635", "#facc15"];
 
@@ -38,10 +45,14 @@ export function SegmentationCanvas({
   segments,
   selectedId,
   onSelect,
+  drawMode,
+  onBoxDrawn,
   disabled,
 }: Props) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const drawingRef = useRef(false);
+  const draftRef = useRef<{ ax: number; ay: number; bx: number; by: number } | null>(null);
   const [layout, setLayout] = useState<ContainLayout | null>(null);
   const layoutRef = useRef<ContainLayout | null>(null);
   const segmentsRef = useRef(segments);
@@ -127,6 +138,25 @@ export function SegmentationCanvas({
       ctx.fillText(label, tl.x + 6, Math.max(0, tl.y - 20) + 14);
       ctx.restore();
     });
+
+    // In-progress hand-drawn box.
+    const draft = draftRef.current;
+    if (draft) {
+      const x = Math.min(draft.ax, draft.bx);
+      const y = Math.min(draft.ay, draft.by);
+      const w = Math.abs(draft.bx - draft.ax);
+      const h = Math.abs(draft.by - draft.ay);
+      ctx.save();
+      ctx.fillStyle = "#0f766e";
+      ctx.globalAlpha = 0.2;
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = "#0f766e";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.restore();
+    }
   }, [decodedMasks, imageHeight, imageWidth, selectedId]);
 
   useEffect(() => {
@@ -138,24 +168,93 @@ export function SegmentationCanvas({
     return () => observer.disconnect();
   }, [draw, imageUrl]);
 
-  const handlePointer = (e: React.PointerEvent<HTMLCanvasElement>) => {
+  const toClampedOriginal = useCallback(
+    (clientX: number, clientY: number): { point: Point; display: Point } | null => {
+      const canvas = canvasRef.current;
+      const current = layoutRef.current;
+      if (!canvas || !current) return null;
+      const rect = canvas.getBoundingClientRect();
+      // Clamp into the displayed image so drags starting on letterboxing work.
+      const dx = Math.min(
+        Math.max(clientX - rect.x, current.offsetX),
+        current.offsetX + current.displayWidth,
+      );
+      const dy = Math.min(
+        Math.max(clientY - rect.y, current.offsetY),
+        current.offsetY + current.displayHeight,
+      );
+      const point = displayToOriginal({ x: dx, y: dy }, current, imageWidth, imageHeight);
+      if (!point) return null;
+      return { point, display: { x: dx, y: dy } };
+    },
+    [imageHeight, imageWidth],
+  );
+
+  const handleTap = (e: React.PointerEvent<HTMLCanvasElement>) => {
     if (disabled) return;
-    const canvas = canvasRef.current;
-    const current = layoutRef.current;
-    if (!canvas || !current) return;
-    const rect = canvas.getBoundingClientRect();
-    const point = displayToOriginal(
-      { x: e.clientX - rect.x, y: e.clientY - rect.y },
-      current,
-      imageWidth,
-      imageHeight,
-    );
-    if (!point) {
+    const hit = toClampedOriginal(e.clientX, e.clientY);
+    if (!hit) {
       onSelect(null);
       return;
     }
-    const hit = findSegmentAtPoint(segmentsRef.current, point, imageWidth, imageHeight, decodedMasks);
-    onSelect(hit ? hit.id : null);
+    const found = findSegmentAtPoint(
+      segmentsRef.current,
+      hit.point,
+      imageWidth,
+      imageHeight,
+      decodedMasks,
+    );
+    onSelect(found ? found.id : null);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (disabled) return;
+    if (!drawMode) {
+      handleTap(e);
+      return;
+    }
+    const hit = toClampedOriginal(e.clientX, e.clientY);
+    if (!hit) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    drawingRef.current = true;
+    draftRef.current = { ax: hit.display.x, ay: hit.display.y, bx: hit.display.x, by: hit.display.y };
+    draw();
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawMode || !drawingRef.current) return;
+    const hit = toClampedOriginal(e.clientX, e.clientY);
+    if (!hit || !draftRef.current) return;
+    draftRef.current = { ...draftRef.current, bx: hit.display.x, by: hit.display.y };
+    draw();
+  };
+
+  const cancelDraw = () => {
+    if (!drawingRef.current) return;
+    drawingRef.current = false;
+    draftRef.current = null;
+    draw();
+  };
+
+  const finishDraw = () => {
+    if (!drawMode || !drawingRef.current) return;
+    drawingRef.current = false;
+    const draft = draftRef.current;
+    draftRef.current = null;
+    draw();
+    const current = layoutRef.current;
+    if (!draft || !current || !onBoxDrawn) return;
+    const a = displayToOriginal({ x: draft.ax, y: draft.ay }, current, imageWidth, imageHeight);
+    const b = displayToOriginal({ x: draft.bx, y: draft.by }, current, imageWidth, imageHeight);
+    if (!a || !b) return;
+    const box = {
+      x: Math.min(a.x, b.x),
+      y: Math.min(a.y, b.y),
+      width: Math.abs(b.x - a.x),
+      height: Math.abs(b.y - a.y),
+    };
+    if (box.width < MIN_DRAW_SIZE || box.height < MIN_DRAW_SIZE) return;
+    onBoxDrawn(box);
   };
 
   void layout;
@@ -175,11 +274,18 @@ export function SegmentationCanvas({
       />
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 h-full w-full cursor-pointer"
-        style={{ touchAction: "manipulation" }}
-        onPointerDown={handlePointer}
+        className={`absolute inset-0 h-full w-full ${drawMode ? "cursor-crosshair" : "cursor-pointer"}`}
+        style={{ touchAction: drawMode ? "none" : "manipulation" }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={() => finishDraw()}
+        onPointerCancel={cancelDraw}
         role="application"
-        aria-label={`${segments.length} detected objects. Tap an object to select it.`}
+        aria-label={
+          drawMode
+            ? "Draw a box around an object to segment it."
+            : `${segments.length} detected objects. Tap an object to select it.`
+        }
       />
     </div>
   );

@@ -21,10 +21,34 @@ describe("segmentRequestSchema", () => {
     expect(segmentRequestSchema.parse(valid).prompt).toBe("snack package");
   });
 
+  it("accepts a box prompt instead of a concept", () => {
+    const { prompt: _prompt, ...withoutPrompt } = valid;
+    void _prompt;
+    const parsed = segmentRequestSchema.parse({
+      ...withoutPrompt,
+      box: { x: 10, y: 10, width: 50, height: 50 },
+    });
+    expect(parsed.box).toMatchObject({ x: 10, y: 10 });
+  });
+
+  it("requires exactly one of prompt or box", () => {
+    const { prompt: _prompt, ...withoutPrompt } = valid;
+    void _prompt;
+    expect(() => segmentRequestSchema.parse(withoutPrompt)).toThrow();
+    expect(() =>
+      segmentRequestSchema.parse({ ...valid, box: { x: 10, y: 10, width: 50, height: 50 } }),
+    ).toThrow();
+    expect(() =>
+      segmentRequestSchema.parse({
+        ...withoutPrompt,
+        box: { x: 10, y: 10, width: -5, height: 50 },
+      }),
+    ).toThrow();
+  });
+
   it("rejects bad mime, dimensions, oversized images, and bad prompts", () => {
     expect(() => segmentRequestSchema.parse({ ...valid, mimeType: "image/gif" })).toThrow();
     expect(() => segmentRequestSchema.parse({ ...valid, prompt: "" })).toThrow();
-    expect(() => segmentRequestSchema.parse({ ...valid, prompt: undefined })).toThrow();
     expect(() => segmentRequestSchema.parse({ ...valid, imageWidth: 0 })).toThrow();
     expect(() =>
       segmentRequestSchema.parse({ ...valid, imageBase64: "x".repeat(14_000_001) }),

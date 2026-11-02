@@ -62,6 +62,7 @@ export default function HomePage() {
   const [segments, setSegments] = useState<Segment[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sampleMode, setSampleMode] = useState(false);
+  const [drawMode, setDrawMode] = useState(false);
   const [concept, setConcept] = useState("");
   const [attempts, setAttempts] = useState(0);
   const [segmentError, setSegmentError] = useState<Failure | null>(null);
@@ -82,6 +83,7 @@ export default function HomePage() {
   explanationRef.current = explanation;
 
   const resetForNewImage = () => {
+    setDrawMode(false);
     setSegments([]);
     setSelectedId(null);
     setSegmentError(null);
@@ -170,11 +172,9 @@ export default function HomePage() {
     }
   }, []);
 
-  const handleAsk = useCallback(
-    async (q: string) => {
-      const img = imageRef.current;
-      const seg = segments.find((s) => s.id === selectedId);
-      if (!img || !seg || q.trim().length === 0) return;
+  const askQuestion = useCallback(
+    async (img: LoadedImage, seg: Segment, q: string) => {
+      if (q.trim().length === 0) return;
       setExplaining(true);
       setAnsweringFollowUp(false);
       setExplainError(null);
@@ -206,7 +206,71 @@ export default function HomePage() {
         setExplaining(false);
       }
     },
-    [segments, selectedId, sampleMode, language],
+    [sampleMode, language],
+  );
+
+  const handleAsk = useCallback(
+    async (q: string) => {
+      const img = imageRef.current;
+      const seg = segments.find((s) => s.id === selectedId);
+      if (!img || !seg) return;
+      await askQuestion(img, seg, q);
+    },
+    [segments, selectedId, askQuestion],
+  );
+
+  const runBoxSegmentation = useCallback(
+    async (img: LoadedImage, box: { x: number; y: number; width: number; height: number }) => {
+      setDrawMode(false);
+      setPhase("segmenting");
+      setSegmentError(null);
+      setEmptyResult(false);
+      setExplanation(null);
+      try {
+        if (sampleMode) {
+          // The user's own box, honestly labeled as a sample result.
+          await new Promise((r) => setTimeout(r, 400));
+          const seg: Segment = {
+            id: `manual-${Date.now()}`,
+            label: "selected region",
+            score: null,
+            bbox: box,
+            polygon: [
+              { x: box.x, y: box.y },
+              { x: box.x + box.width, y: box.y },
+              { x: box.x + box.width, y: box.y + box.height },
+              { x: box.x, y: box.y + box.height },
+            ],
+            mask: null,
+          };
+          setSegments((prev) => [...prev, seg]);
+          setSelectedId(seg.id);
+          setPhase("ready");
+          await askQuestion(img, seg, "What is this?");
+          return;
+        }
+        const result = await postJson<SegmentResponse>("/api/segment", {
+          imageBase64: img.base64,
+          mimeType: img.mimeType,
+          imageWidth: img.width,
+          imageHeight: img.height,
+          box,
+        });
+        if (result.segments.length === 0) {
+          setEmptyResult(true);
+          setPhase("ready");
+          return;
+        }
+        setSegments((prev) => [...prev, ...result.segments]);
+        setSelectedId(result.segments[0].id);
+        setPhase("ready");
+        await askQuestion(img, result.segments[0], "What is this?");
+      } catch (err) {
+        setPhase("ready");
+        setSegmentError(err as Failure);
+      }
+    },
+    [sampleMode, askQuestion],
   );
 
   const handleFollowUp = useCallback(
@@ -352,12 +416,36 @@ export default function HomePage() {
 
       {phase === "command" && image && (
         <div className="flex flex-col gap-3">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={image.url}
-            alt="Uploaded photo preview"
-            className="w-full rounded-lg"
-            style={{ aspectRatio: `${image.width} / ${image.height}`, objectFit: "contain" }}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setDrawMode((v) => !v)}
+              aria-pressed={drawMode}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                drawMode
+                  ? "border-teal-700 bg-teal-700 text-white"
+                  : "border-neutral-300 bg-white text-neutral-700"
+              }`}
+            >
+              {drawMode ? "Cancel drawing" : "Draw a box"}
+            </button>
+            {drawMode ? (
+              <p className="text-xs text-neutral-500" role="status">
+                Drag on the photo to outline an object, then release.
+              </p>
+            ) : (
+              <p className="text-xs text-neutral-500">…or outline an object directly.</p>
+            )}
+          </div>
+          <SegmentationCanvas
+            imageUrl={image.url}
+            imageWidth={image.width}
+            imageHeight={image.height}
+            segments={[]}
+            selectedId={null}
+            onSelect={() => {}}
+            drawMode={drawMode}
+            onBoxDrawn={(box) => runBoxSegmentation(image, box)}
           />
           <CommandInput
             concept={concept}
@@ -393,6 +481,25 @@ export default function HomePage() {
             </div>
           ) : (
             <>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDrawMode((v) => !v)}
+                  aria-pressed={drawMode}
+                  className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                    drawMode
+                      ? "border-teal-700 bg-teal-700 text-white"
+                      : "border-neutral-300 bg-white text-neutral-700"
+                  }`}
+                >
+                  {drawMode ? "Cancel drawing" : "Draw a box"}
+                </button>
+                {drawMode && (
+                  <p className="text-xs text-neutral-500" role="status">
+                    Drag on the photo to outline an object, then release.
+                  </p>
+                )}
+              </div>
               <SegmentationCanvas
                 imageUrl={image.url}
                 imageWidth={image.width}
@@ -400,6 +507,8 @@ export default function HomePage() {
                 segments={segments}
                 selectedId={selectedId}
                 onSelect={setSelectedId}
+                drawMode={drawMode}
+                onBoxDrawn={(box) => runBoxSegmentation(image, box)}
               />
 
               {segmentError && !sampleMode && <ErrorBox failure={segmentError} />}

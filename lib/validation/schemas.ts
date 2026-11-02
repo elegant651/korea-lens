@@ -16,15 +16,31 @@ const base64Payload = z
   .max(MAX_IMAGE_BASE64_CHARS, "image is too large (max ~10MB)")
   .refine((s) => /^[A-Za-z0-9+/=\s-]+$/.test(s), "image must be base64 or base64url");
 
-export const segmentRequestSchema = z.object({
-  /** Base64-encoded image bytes (no data-URL prefix). */
-  imageBase64: base64Payload,
-  mimeType: z.enum(SUPPORTED_IMAGE_MIMES),
-  imageWidth: z.number().int().positive().max(20000),
-  imageHeight: z.number().int().positive().max(20000),
-  /** One concept noun phrase, e.g. "snack package". Required by SAM 3.1. */
-  prompt: z.string().trim().min(1, "prompt is required").max(MAX_PROMPT_CHARS),
+const boxPromptSchema = z.object({
+  /** Hand-drawn box in image pixels (top-left + size). */
+  x: z.number().finite().min(0).max(20000),
+  y: z.number().finite().min(0).max(20000),
+  width: z.number().finite().positive().max(20000),
+  height: z.number().finite().positive().max(20000),
 });
+
+export type BoxPrompt = z.infer<typeof boxPromptSchema>;
+
+export const segmentRequestSchema = z
+  .object({
+    /** Base64-encoded image bytes (no data-URL prefix). */
+    imageBase64: base64Payload,
+    mimeType: z.enum(SUPPORTED_IMAGE_MIMES),
+    imageWidth: z.number().int().positive().max(20000),
+    imageHeight: z.number().int().positive().max(20000),
+    /** One concept noun phrase, e.g. "snack package". */
+    prompt: z.string().trim().min(1).max(MAX_PROMPT_CHARS).optional(),
+    /** Hand-drawn box prompt. Exactly one of prompt/box is required. */
+    box: boxPromptSchema.optional(),
+  })
+  .refine((d) => (d.prompt ? 1 : 0) + (d.box ? 1 : 0) === 1, {
+    message: "Provide exactly one of prompt or box.",
+  });
 
 export type SegmentRequest = z.infer<typeof segmentRequestSchema>;
 

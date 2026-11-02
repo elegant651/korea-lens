@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { MetaConfigError, MetaProviderError } from "@/lib/meta/client";
-import { segmentImage } from "@/lib/meta/sam";
+import { InvalidBoxError, segmentImage } from "@/lib/meta/sam";
 import { segmentRequestSchema, type ApiError } from "@/lib/validation/schemas";
 
 export const runtime = "nodejs";
@@ -42,11 +42,15 @@ export async function POST(request: Request): Promise<NextResponse> {
       imageWidth: input.imageWidth,
       imageHeight: input.imageHeight,
       concept: input.prompt,
+      box: input.box,
     });
     return NextResponse.json({ ...result, live: true });
   } catch (err) {
     if (err instanceof MetaConfigError) {
       return errorBody("not_configured", err.message, false, 503);
+    }
+    if (err instanceof InvalidBoxError) {
+      return errorBody("invalid_input", err.message, false, 400);
     }
     if (err instanceof MetaProviderError) {
       // Log provider diagnostics server-side without secrets; return a safe message.

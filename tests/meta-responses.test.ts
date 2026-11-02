@@ -4,7 +4,12 @@ import {
   MetaProviderError,
   providerErrorFromResponse,
 } from "@/lib/meta/client";
-import { buildSamRequest, segmentsFromOutputText } from "@/lib/meta/sam";
+import {
+  buildBoxText,
+  buildSamRequest,
+  InvalidBoxError,
+  segmentsFromOutputText,
+} from "@/lib/meta/sam";
 import { buildVisionRequest } from "@/lib/meta/muse-spark";
 import { decodeSegmentMask, maskForegroundCount } from "@/lib/segmentation/mask-decoder";
 
@@ -22,7 +27,7 @@ describe("buildSamRequest", () => {
   it("builds the documented Responses API request for sam-3.1", () => {
     const req = buildSamRequest({
       model: "sam-3.1",
-      concept: "glasses",
+      inputText: "glasses",
       mimeType: "image/jpeg",
       imageBase64: "QUJD",
     });
@@ -40,6 +45,26 @@ describe("buildSamRequest", () => {
       ],
       metadata: { include_confidence: "true", mask_encoding: "one_bit" },
     });
+  });
+});
+
+describe("buildBoxText", () => {
+  it("builds box-prompt token text with whole clamped pixels", () => {
+    expect(buildBoxText({ x: 10.7, y: 20.2, width: 100, height: 50 }, 640, 480)).toBe(
+      "<0f>1<|box;x1=10;y1=20;x2=110;y2=70;w=640;h=480|>",
+    );
+  });
+
+  it("clamps boxes hanging off the image edge", () => {
+    expect(buildBoxText({ x: 600, y: 400, width: 100, height: 100 }, 640, 480)).toBe(
+      "<0f>1<|box;x1=600;y1=400;x2=639;y2=479;w=640;h=480|>",
+    );
+  });
+
+  it("rejects degenerate boxes", () => {
+    expect(() => buildBoxText({ x: 700, y: 500, width: 10, height: 10 }, 640, 480)).toThrow(
+      InvalidBoxError,
+    );
   });
 });
 
@@ -79,6 +104,12 @@ describe("segmentsFromOutputText", () => {
     const segments = await segmentsFromOutputText(withConf, "glasses", 320, 334);
     expect(segments).toHaveLength(1);
     expect(segments[0].score).toBeCloseTo(0.9609375);
+  });
+
+  it("prefixes ids for manual box results", async () => {
+    const segments = await segmentsFromOutputText(REAL_SAM_OUTPUT, "selected region", 320, 334, "manual");
+    expect(segments.map((s) => s.id)).toEqual(["manual-0", "manual-1"]);
+    expect(segments[0].label).toBe("selected region");
   });
 
   it("falls back to a bbox-only segment when a mask payload is corrupt", async () => {

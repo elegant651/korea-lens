@@ -1,4 +1,5 @@
 import {
+  buildObjectPrompt,
   decodeMaskToRaster,
   parseImageStream,
   recordsOfKind,
@@ -6,6 +7,7 @@ import {
 } from "@meta-sam/parser";
 import type { Point, Segment } from "@/lib/segmentation/types";
 import { packBitmaskToBase64 } from "@/lib/segmentation/mask-decoder";
+import type { BoxPrompt } from "@/lib/validation/schemas";
 import {
   buildAuthHeaders,
   extractOutputText,
@@ -13,13 +15,23 @@ import {
   metaPostJson,
 } from "./client";
 
+/** A hand-drawn box prompt that cannot be encoded (degenerate or absurd). */
+export class InvalidBoxError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidBoxError";
+  }
+}
+
 export interface SegmentImageInput {
   imageBase64: string;
   mimeType: string;
   imageWidth: number;
   imageHeight: number;
-  /** One short noun phrase, e.g. "snack package". Required by SAM 3.1. */
-  concept: string;
+  /** One short noun phrase, e.g. "snack package". Exactly one of concept/box. */
+  concept?: string;
+  /** Hand-drawn box in image pixels. Exactly one of concept/box. */
+  box?: BoxPrompt;
 }
 
 export interface SegmentImageOutput {
@@ -33,14 +45,15 @@ const SAM_TIMEOUT_MS = 60_000;
 
 export interface SamRequestArgs {
   model: string;
-  concept: string;
+  /** Concept noun phrase or box-prompt token text. */
+  inputText: string;
   mimeType: string;
   imageBase64: string;
 }
 
 /**
  * Build the documented non-streaming Responses API request for SAM 3.1:
- * one concept noun phrase in input_text plus the image as a base64 data URL.
+ * one input_text prompt plus the image as a base64 data URL.
  * See https://dev.meta.ai/docs/sam/segmenting
  */
 export function buildSamRequest(args: SamRequestArgs): Record<string, unknown> {
@@ -51,7 +64,7 @@ export function buildSamRequest(args: SamRequestArgs): Record<string, unknown> {
         type: "message",
         role: "user",
         content: [
-          { type: "input_text", text: args.concept },
+          { type: "input_text", text: args.inputText },
           { type: "input_image", image_url: `data:${args.mimeType};base64,${args.imageBase64}` },
         ],
       },
@@ -61,13 +74,53 @@ export function buildSamRequest(args: SamRequestArgs): Record<string, unknown> {
 }
 
 /**
- * Segment matching objects via the Meta Model API (sam-3.1). Uses a
- * non-streaming request and parses the output text with the official
- * @meta-sam/parser grammar. Zero matches is a normal empty result.
+ * Build box-prompt token text (`<0f>1<|box;..|>`) for one hand-drawn box,
+ * clamped inside the image and converted to whole pixels.
+ */
+export function buildBoxText(box: BoxPrompt, imageWidth: number, imageHeight: number): string {
+  const left = Math.floor(Math.max(0, box.x));
+  const top = Math.floor(Math.max(0, box.y));
+  const right = Math.min(imageWidth, Math.ceil(box.x + box.width));
+  const bottom = Math.min(imageHeight, Math.ceil(box.y + box.height));
+  if (right - left < 1 || bottom - top < 1) {
+    throw new InvalidBoxError("Drawn box is too small or outside the image.");
+  }
+  try {
+    return buildObjectPrompt({
+      size: { width: imageWidth, height: imageHeight },
+      objects: [{ id: 1, prompts: [{ box: { left, top, right, bottom } }] }],
+    });
+  } catch {
+    throw new InvalidBoxError("Drawn box could not be used. Please try again.");
+  }
+}
+
+/**
+ * Segment via the Meta Model API (sam-3.1): either every match of a concept
+ * noun phrase, or the object inside one hand-drawn box. Uses a non-streaming
+ * request and parses the output text with the official @meta-sam/parser
+ * grammar. Zero matches is a normal empty result.
  */
 export async function segmentImage(input: SegmentImageInput): Promise<SegmentImageOutput> {
   const config = getSamConfig();
-  const concept = input.concept.trim();
+  const concept = input.concept?.trim() || null;
+
+  let inputText: string;
+  let label: string;
+  let idPrefix: string;
+  if (input.box && concept) {
+    throw new InvalidBoxError("Provide exactly one of prompt or box.");
+  } else if (input.box) {
+    inputText = buildBoxText(input.box, input.imageWidth, input.imageHeight);
+    label = "selected region";
+    idPrefix = "manual";
+  } else if (concept) {
+    inputText = concept;
+    label = concept;
+    idPrefix = "sam";
+  } else {
+    throw new InvalidBoxError("Provide exactly one of prompt or box.");
+  }
 
   const raw = await metaPostJson(config.apiUrl, {
     timeoutMs: SAM_TIMEOUT_MS,
@@ -75,7 +128,7 @@ export async function segmentImage(input: SegmentImageInput): Promise<SegmentIma
     body: JSON.stringify(
       buildSamRequest({
         model: config.model,
-        concept,
+        inputText,
         mimeType: input.mimeType,
         imageBase64: input.imageBase64,
       }),
@@ -85,11 +138,12 @@ export async function segmentImage(input: SegmentImageInput): Promise<SegmentIma
   const outputText = extractOutputText(raw);
   const segments = await segmentsFromOutputText(
     outputText ?? "",
-    concept,
+    label,
     input.imageWidth,
     input.imageHeight,
+    idPrefix,
   );
-  return { segments, imageWidth: input.imageWidth, imageHeight: input.imageHeight, prompt: concept };
+  return { segments, imageWidth: input.imageWidth, imageHeight: input.imageHeight, prompt: label };
 }
 
 /**
@@ -99,9 +153,10 @@ export async function segmentImage(input: SegmentImageInput): Promise<SegmentIma
  */
 export async function segmentsFromOutputText(
   outputText: string,
-  concept: string,
+  label: string,
   imageWidth: number,
   imageHeight: number,
+  idPrefix = "sam",
 ): Promise<Segment[]> {
   if (outputText.trim().length === 0) return [];
 
@@ -151,7 +206,7 @@ export async function segmentsFromOutputText(
           ]
         : null;
 
-    segments.push({ id: `sam-${box.objectId}`, label: concept, score, bbox, polygon, mask });
+    segments.push({ id: `${idPrefix}-${box.objectId}`, label, score, bbox, polygon, mask });
   }
   return segments;
 }
