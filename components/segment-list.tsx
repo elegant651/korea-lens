@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Segment } from "@/lib/segmentation/types";
 import { SegmentThumbnail } from "./segment-thumbnail";
 
@@ -10,6 +10,8 @@ interface Props {
   onSelect: (id: string | null) => void;
   onClear: () => void;
   onRetry: () => void;
+  /** Run segmentation for a different object title. */
+  onSearch: (concept: string) => void;
   /** Source photo URL for thumbnails; rows render without them when null. */
   imageUrl: string | null;
   disabled?: boolean;
@@ -21,10 +23,18 @@ export function SegmentList({
   onSelect,
   onClear,
   onRetry,
+  onSearch,
   imageUrl,
   disabled,
 }: Props) {
   const itemRefs = useRef(new Map<string, HTMLLIElement>());
+  const [search, setSearch] = useState("");
+
+  const submitSearch = () => {
+    if (search.trim().length === 0) return;
+    onSearch(search.trim());
+    setSearch("");
+  };
 
   // When an object is tapped on the image, bring its list row into view.
   useEffect(() => {
@@ -66,11 +76,10 @@ export function SegmentList({
                 aria-selected={isSelected}
                 disabled={disabled}
                 onClick={() => onSelect(isSelected ? null : seg.id)}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm disabled:opacity-50 ${
-                  isSelected
+                className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm disabled:opacity-50 ${isSelected
                     ? "border-teal-700 bg-teal-50 font-semibold text-teal-900"
                     : "border-neutral-200 bg-white text-neutral-800"
-                }`}
+                  }`}
               >
                 <span className="flex min-w-0 flex-1 items-center gap-2.5">
                   {imageUrl && <SegmentThumbnail imageUrl={imageUrl} bbox={seg.bbox} />}
@@ -104,6 +113,29 @@ export function SegmentList({
           className="font-medium text-neutral-600 underline underline-offset-2 disabled:opacity-40"
         >
           Retry segmentation
+        </button>
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={search}
+          maxLength={100}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submitSearch();
+          }}
+          placeholder="Find another object…"
+          disabled={disabled}
+          aria-label="Find another object"
+          className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-900 placeholder:text-neutral-400 disabled:bg-neutral-100"
+        />
+        <button
+          type="button"
+          onClick={submitSearch}
+          disabled={disabled || search.trim().length === 0}
+          className="shrink-0 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+        >
+          Find
         </button>
       </div>
     </section>

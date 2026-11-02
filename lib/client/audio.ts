@@ -177,6 +177,7 @@ function wavBase64(buffer: ArrayBuffer): string {
 }
 
 const BCP47: Record<string, string> = {
+  Korean: "ko",
   English: "en",
   Spanish: "es",
   French: "fr",

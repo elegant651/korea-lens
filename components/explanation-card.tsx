@@ -79,7 +79,8 @@ export function ExplanationCard({
       if (speakTimer.current) clearInterval(speakTimer.current);
       return;
     }
-    speakText(speechText(explanation), language);
+    if (!explanation.koreanPhrase) return;
+    speakText(explanation.koreanPhrase, "Korean");
     setSpeaking(true);
     if (speakTimer.current) clearInterval(speakTimer.current);
     speakTimer.current = setInterval(() => {
@@ -141,19 +142,6 @@ export function ExplanationCard({
                   {question}
                 </p>
               )}
-              {isSpeechSupported() && (
-                <button
-                  type="button"
-                  onClick={toggleSpeech}
-                  aria-pressed={speaking}
-                  className="flex w-fit items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700"
-                >
-                  <span aria-hidden className={speaking ? "animate-pulse" : ""}>
-                    {speaking ? "■" : "▶"}
-                  </span>
-                  {speaking ? "Stop" : "Listen"}
-                </button>
-              )}
 
               <p className="text-sm leading-relaxed text-neutral-800">
                 {explanation.shortDescription}
@@ -173,6 +161,21 @@ export function ExplanationCard({
                     {explanation.koreanPhrase}
                   </p>
                 </div>
+              )}
+
+              {isSpeechSupported() && explanation.koreanPhrase && (
+                <button
+                  type="button"
+                  onClick={toggleSpeech}
+                  aria-pressed={speaking}
+                  aria-label={speaking ? "Stop reading phrase" : "Listen to the Korean phrase"}
+                  className="flex w-fit items-center gap-1.5 rounded-full border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700"
+                >
+                  <span aria-hidden className={speaking ? "animate-pulse" : ""}>
+                    {speaking ? "■" : "▶"}
+                  </span>
+                  {speaking ? "Stop" : "Listen"}
+                </button>
               )}
 
               {explanation.uncertainties.length > 0 && (
@@ -233,70 +236,68 @@ export function ExplanationCard({
 
             <div className="flex shrink-0 flex-col gap-1.5 border-t border-neutral-100 bg-white px-4 py-3">
               <div className="flex gap-2">
-                  {canRecord && (
-                    <button
-                      type="button"
-                      onClick={toggleRecording}
-                      disabled={busy || voiceState === "working"}
-                      aria-pressed={voiceState === "recording"}
-                      aria-label={voiceState === "recording" ? "Stop recording" : "Ask by voice"}
-                      title={voiceState === "recording" ? "Stop recording" : "Ask by voice"}
-                      className={`flex shrink-0 items-center justify-center rounded-lg border px-2.5 disabled:opacity-50 ${
-                        voiceState === "recording"
-                          ? "border-red-600 bg-red-50"
-                          : "border-neutral-300 bg-white"
-                      }`}
-                    >
-                      <span
-                        aria-hidden
-                        className={`inline-block h-2.5 w-2.5 rounded-full ${
-                          voiceState === "recording"
-                            ? "animate-pulse bg-red-600"
-                            : "bg-neutral-500"
-                        }`}
-                      />
-                    </button>
-                  )}
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={followUp}
-                    maxLength={500}
-                    onChange={(e) => setFollowUp(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") submit();
-                    }}
-                    placeholder={
-                      voiceState === "recording"
-                        ? "Listening… tap stop when done"
-                        : voiceState === "working"
-                          ? "Transcribing…"
-                          : "Ask a follow-up about this object…"
-                    }
-                    disabled={busy || voiceState !== "idle"}
-                    aria-label="Follow-up question"
-                    className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 disabled:bg-neutral-100"
-                  />
+                {canRecord && (
                   <button
                     type="button"
-                    onClick={submit}
-                    disabled={busy || voiceState !== "idle" || followUp.trim().length === 0}
-                    className="shrink-0 rounded-lg border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"
+                    onClick={toggleRecording}
+                    disabled={busy || voiceState === "working"}
+                    aria-pressed={voiceState === "recording"}
+                    aria-label={voiceState === "recording" ? "Stop recording" : "Ask by voice"}
+                    title={voiceState === "recording" ? "Stop recording" : "Ask by voice"}
+                    className={`flex shrink-0 items-center justify-center rounded-lg border px-2.5 disabled:opacity-50 ${voiceState === "recording"
+                        ? "border-red-600 bg-red-50"
+                        : "border-neutral-300 bg-white"
+                      }`}
                   >
-                    {busy ? "…" : "Send"}
+                    <span
+                      aria-hidden
+                      className={`inline-block h-2.5 w-2.5 rounded-full ${voiceState === "recording"
+                          ? "animate-pulse bg-red-600"
+                          : "bg-neutral-500"
+                        }`}
+                    />
                   </button>
-                </div>
-                {voiceState === "recording" && (
-                  <p className="text-xs text-red-700" role="status">
-                    Recording… tap the button to stop (max 30s).
-                  </p>
                 )}
-                {voiceError && (
-                  <p className="text-xs text-red-700" role="alert">
-                    {voiceError}
-                  </p>
-                )}
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={followUp}
+                  maxLength={500}
+                  onChange={(e) => setFollowUp(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submit();
+                  }}
+                  placeholder={
+                    voiceState === "recording"
+                      ? "Listening… tap stop when done"
+                      : voiceState === "working"
+                        ? "Transcribing…"
+                        : "Ask a follow-up about this object…"
+                  }
+                  disabled={busy || voiceState !== "idle"}
+                  aria-label="Follow-up question"
+                  className="min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 placeholder:text-neutral-400 disabled:bg-neutral-100"
+                />
+                <button
+                  type="button"
+                  onClick={submit}
+                  disabled={busy || voiceState !== "idle" || followUp.trim().length === 0}
+                  className="shrink-0 rounded-lg border border-teal-700 px-3 py-2 text-sm font-semibold text-teal-800 disabled:opacity-50"
+                >
+                  {busy ? "…" : "Send"}
+                </button>
               </div>
+              {voiceState === "recording" && (
+                <p className="text-xs text-red-700" role="status">
+                  Recording… tap the button to stop (max 30s).
+                </p>
+              )}
+              {voiceError && (
+                <p className="text-xs text-red-700" role="alert">
+                  {voiceError}
+                </p>
+              )}
+            </div>
           </section>
         )}
       </div>
@@ -307,18 +308,11 @@ export function ExplanationCard({
 function LiveBadge({ live }: { live: boolean }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${
-        live ? "bg-teal-100 text-teal-900" : "bg-amber-100 text-amber-900"
-      }`}
+      className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${live ? "bg-teal-100 text-teal-900" : "bg-amber-100 text-amber-900"
+        }`}
     >
       {live ? "Live answer" : "Sample"}
     </span>
   );
 }
 
-function speechText(explanation: ExplainResponse): string {
-  const parts = [`${explanation.likelyName}.`, explanation.shortDescription];
-  if (explanation.travelContext) parts.push(explanation.travelContext);
-  if (explanation.koreanPhrase) parts.push(`In Korean: ${explanation.koreanPhrase}.`);
-  return parts.join(" ");
-}

@@ -440,6 +440,10 @@ export default function HomePage() {
                 segments={segments}
                 selectedId={selectedId}
                 imageUrl={image.url}
+                onSearch={(c) => {
+                  setConcept(c);
+                  runSegmentation(image, c, 1);
+                }}
                 onSelect={setSelectedId}
                 onClear={() => {
                   setSelectedId(null);
