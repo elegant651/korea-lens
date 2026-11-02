@@ -97,7 +97,7 @@ export function SegmentationCanvas({
     const segs = segmentsRef.current;
     segs.forEach((seg, i) => {
       const isSelected = seg.id === selectedId;
-      const color = isSelected ? "#fde047" : colorFor(i);
+      const color = isSelected ? "#2563eb" : colorFor(i);
       ctx.save();
       ctx.globalAlpha = selectedId && !isSelected ? 0.25 : 0.55;
       ctx.fillStyle = color;
@@ -120,20 +120,25 @@ export function SegmentationCanvas({
       }
       ctx.restore();
 
-      // Outline + index badge.
+      // Outline + index badge. Selected gets a white halo + blue glow.
       ctx.save();
       ctx.globalAlpha = selectedId && !isSelected ? 0.4 : 1;
-      ctx.strokeStyle = isSelected ? "#713f12" : color;
-      ctx.lineWidth = isSelected ? 3 : 2;
       const tl = originalToDisplay({ x: seg.bbox.x, y: seg.bbox.y }, next);
       const w = seg.bbox.width * next.scale;
       const h = seg.bbox.height * next.scale;
+      if (isSelected) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 6;
+        ctx.strokeRect(tl.x, tl.y, w, h);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = isSelected ? 2.5 : 2;
       ctx.strokeRect(tl.x, tl.y, w, h);
-      ctx.fillStyle = isSelected ? "#fde047" : "rgba(0,0,0,0.75)";
+      ctx.fillStyle = isSelected ? "#2563eb" : "rgba(0,0,0,0.75)";
       const label = String(i + 1);
       const tw = ctx.measureText(label).width;
       ctx.fillRect(tl.x, Math.max(0, tl.y - 20), tw + 12, 20);
-      ctx.fillStyle = isSelected ? "#713f12" : "#fff";
+      ctx.fillStyle = "#fff";
       ctx.font = "600 12px system-ui, sans-serif";
       ctx.fillText(label, tl.x + 6, Math.max(0, tl.y - 20) + 14);
       ctx.restore();
@@ -147,11 +152,11 @@ export function SegmentationCanvas({
       const w = Math.abs(draft.bx - draft.ax);
       const h = Math.abs(draft.by - draft.ay);
       ctx.save();
-      ctx.fillStyle = "#0f766e";
+      ctx.fillStyle = "#2563eb";
       ctx.globalAlpha = 0.2;
       ctx.fillRect(x, y, w, h);
       ctx.globalAlpha = 1;
-      ctx.strokeStyle = "#0f766e";
+      ctx.strokeStyle = "#2563eb";
       ctx.lineWidth = 2;
       ctx.setLineDash([6, 4]);
       ctx.strokeRect(x, y, w, h);
@@ -272,6 +277,22 @@ export function SegmentationCanvas({
         className="absolute inset-0 h-full w-full object-contain"
         draggable={false}
       />
+      {selectedId && !drawMode && (
+        <div className="pointer-events-none absolute left-2 top-2 z-10 flex items-center gap-1.5 rounded-full bg-blue-600 py-1 pl-2 pr-3 text-xs font-bold text-white shadow-lg">
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
+            <circle cx="7" cy="7" r="7" fill="#fff" />
+            <path
+              d="M4.2 7.2 6.2 9.2 9.8 4.8"
+              fill="none"
+              stroke="#2563eb"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Selected!
+        </div>
+      )}
       <canvas
         ref={canvasRef}
         className={`absolute inset-0 h-full w-full ${drawMode ? "cursor-crosshair" : "cursor-pointer"}`}

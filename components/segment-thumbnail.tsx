@@ -30,6 +30,7 @@ interface Props {
   imageUrl: string;
   bbox: BoundingBox;
   size?: number;
+  shape?: "rounded" | "circle";
 }
 
 /**
@@ -37,7 +38,7 @@ interface Props {
  * segment into a small canvas; the photo itself is decoded only once no
  * matter how many rows are shown.
  */
-export function SegmentThumbnail({ imageUrl, bbox, size = 44 }: Props) {
+export function SegmentThumbnail({ imageUrl, bbox, size = 44, shape = "rounded" }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -75,7 +76,7 @@ export function SegmentThumbnail({ imageUrl, bbox, size = 44 }: Props) {
     <canvas
       ref={canvasRef}
       aria-hidden
-      className="shrink-0 rounded-md bg-neutral-200"
+      className={`shrink-0 bg-neutral-200 ${shape === "circle" ? "rounded-full" : "rounded-md"}`}
       style={{ width: size, height: size }}
     />
   );

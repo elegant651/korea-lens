@@ -77,7 +77,7 @@ export function SegmentList({
                 disabled={disabled}
                 onClick={() => onSelect(isSelected ? null : seg.id)}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left text-sm disabled:opacity-50 ${isSelected
-                    ? "border-teal-700 bg-teal-50 font-semibold text-teal-900"
+                    ? "border-blue-600 bg-blue-50 font-semibold text-blue-900"
                     : "border-neutral-200 bg-white text-neutral-800"
                   }`}
               >
@@ -133,7 +133,7 @@ export function SegmentList({
           type="button"
           onClick={submitSearch}
           disabled={disabled || search.trim().length === 0}
-          className="shrink-0 rounded-lg bg-teal-700 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
+          className="shrink-0 rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
         >
           Find
         </button>

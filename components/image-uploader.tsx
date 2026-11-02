@@ -31,7 +31,7 @@ export function ImageUploader({ onFile, onSample, disabled }: Props) {
           type="button"
           disabled={disabled}
           onClick={() => cameraRef.current?.click()}
-          className="rounded-xl bg-teal-700 px-4 py-3.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
+          className="rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50"
         >
           Take a photo
         </button>
@@ -76,7 +76,7 @@ export function ImageUploader({ onFile, onSample, disabled }: Props) {
         type="button"
         disabled={disabled}
         onClick={onSample}
-        className="text-sm font-medium text-teal-800 underline underline-offset-2 disabled:opacity-50"
+        className="text-sm font-medium text-blue-700 underline underline-offset-2 disabled:opacity-50"
       >
         No photo handy? Try the labeled sample shelf
       </button>

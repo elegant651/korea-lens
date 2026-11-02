@@ -362,16 +362,28 @@ export default function HomePage() {
       <header className="sticky top-0 z-10 -mx-4 border-b border-neutral-200 bg-white/95 px-4 py-3 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden className="shrink-0">
-              <rect width="38" height="38" rx="11" fill="#0f766e" />
-              <circle cx="16.5" cy="16.5" r="7" fill="none" stroke="#fff" strokeWidth="2.5" />
-              <line x1="21.5" y1="21.5" x2="28" y2="28" stroke="#fde047" strokeWidth="3" strokeLinecap="round" />
+            <svg width="42" height="42" viewBox="0 0 40 40" aria-hidden className="shrink-0">
+              <defs>
+                <linearGradient id="kl-logo" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0" stopColor="#3b82f6" />
+                  <stop offset="1" stopColor="#7c3aed" />
+                </linearGradient>
+              </defs>
+              <rect width="40" height="40" rx="11" fill="url(#kl-logo)" />
+              <circle cx="18" cy="20" r="8.5" fill="none" stroke="#fff" strokeWidth="3" />
+              <circle cx="18" cy="20" r="3" fill="#fff" />
+              <path
+                d="M30 4.5 L31.4 8.6 L35.5 10 L31.4 11.4 L30 15.5 L28.6 11.4 L24.5 10 L28.6 8.6 Z"
+                fill="#fde047"
+              />
             </svg>
             <div>
-              <h1 className="text-2xl font-extrabold leading-none tracking-tight text-neutral-900">
-                Korea <span className="text-teal-700">Lens</span>
+              <h1 className="text-[26px] font-extrabold leading-none tracking-tight text-blue-950">
+                KoreaLens
               </h1>
-              <p className="mt-1 text-xs text-neutral-500">Point at Korea. Understand everything.</p>
+              <p className="mt-1 text-xs font-medium text-blue-950/70">
+                Point at Korea. Understand everything.
+              </p>
             </div>
           </div>
           {phase !== "upload" && (
@@ -389,9 +401,25 @@ export default function HomePage() {
       {phase === "upload" && (
         <div className="flex flex-col gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
           <p className="text-sm leading-relaxed text-neutral-700">
-            Visiting Korea and puzzled by something you see? Snap a photo, and Korea Lens will
+            Visiting Korea and puzzled by something you see? Snap a photo, and KoreaLens will
             explain it in your language. Photos are only processed to help you — never stored.
           </p>
+          <div className="flex items-start justify-around" aria-label="Select, ask, explore">
+            {[
+              ["Select", "M7 3.5H3.5V7M17 3.5h3.5V7M7 20.5H3.5V17M17 20.5h3.5V17"],
+              ["Ask", "M4 5.5h16V16H9.5L4.5 20.5V5.5Z"],
+              ["Explore", "M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17ZM3.5 12h17M12 3.5c-4.5 3.5-4.5 13.5 0 17M12 3.5c4.5 3.5 4.5 13.5 0 17"],
+            ].map(([label, path]) => (
+              <div key={label} className="flex flex-col items-center gap-1">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-blue-600 bg-white">
+                  <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden fill="none" stroke="#2563eb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d={path} />
+                  </svg>
+                </span>
+                <span className="text-xs font-semibold text-neutral-700">{label}</span>
+              </div>
+            ))}
+          </div>
           <ol className="flex flex-col gap-2" aria-label="How it works">
             {[
               ["1", "Snap a shelf, menu, or sign"],
@@ -401,7 +429,7 @@ export default function HomePage() {
               <li key={n} className="flex items-center gap-2.5 text-sm text-neutral-700">
                 <span
                   aria-hidden
-                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-bold text-white"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"
                 >
                   {n}
                 </span>
@@ -423,7 +451,7 @@ export default function HomePage() {
               aria-pressed={drawMode}
               className={`rounded-full border px-3 py-1 text-xs font-medium ${
                 drawMode
-                  ? "border-teal-700 bg-teal-700 text-white"
+                  ? "border-blue-600 bg-blue-600 text-white"
                   : "border-neutral-300 bg-white text-neutral-700"
               }`}
             >
@@ -472,7 +500,7 @@ export default function HomePage() {
               aria-live="polite"
             >
               <div
-                className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-teal-700"
+                className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-300 border-t-blue-600"
                 aria-hidden
               />
               <p className="text-sm font-medium text-neutral-700">
@@ -488,7 +516,7 @@ export default function HomePage() {
                   aria-pressed={drawMode}
                   className={`rounded-full border px-3 py-1 text-xs font-medium ${
                     drawMode
-                      ? "border-teal-700 bg-teal-700 text-white"
+                      ? "border-blue-600 bg-blue-600 text-white"
                       : "border-neutral-300 bg-white text-neutral-700"
                   }`}
                 >
@@ -532,7 +560,7 @@ export default function HomePage() {
                         setConcept(p);
                         runSegmentation(image, p, attempts + 1);
                       }}
-                      className="rounded-full border border-teal-700 bg-white px-3 py-1 text-xs font-medium text-teal-800 disabled:opacity-40"
+                      className="rounded-full border border-blue-600 bg-white px-3 py-1 text-xs font-medium text-blue-700 disabled:opacity-40"
                     >
                       Find: {p}
                     </button>
@@ -582,7 +610,7 @@ export default function HomePage() {
               {explaining && (
                 <div className="flex items-center gap-2 text-sm text-neutral-600" role="status">
                   <div
-                    className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-teal-700"
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-blue-600"
                     aria-hidden
                   />
                   {answeringFollowUp ? "Searching for the answer…" : "Reading the selected object…"}
@@ -600,6 +628,8 @@ export default function HomePage() {
                     onFollowUp={handleFollowUp}
                     onTranscribe={handleTranscribe}
                     thread={thread}
+                    imageUrl={image.url}
+                    bbox={selected?.bbox ?? null}
                   />
                 </>
               )}
